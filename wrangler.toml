@@ -1,0 +1,6 @@
+name = "nyawer-xibox"
+main = "src/index.ts"
+compatibility_date = "2025-07-04"
+
+[triggers]
+crons = ["*/5 * * * *"]
