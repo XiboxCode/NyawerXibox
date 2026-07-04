@@ -13,14 +13,23 @@ NyawerXibox is a Telegram bot that provides donation notifications from Trakteer
   - Trakteer: constant-time token comparison via `X-Webhook-Token` header.
   - Saweria: constant-time secret comparison via `?secret=` query parameter.
 
+> [!IMPORTANT]
+> 
+> ## Nyawer
+>
+> - NyawerXibox Bot: [@nyawerxibox_bot](https://t.me/nyawerxibox_bot)
+> - Join Community Group: [https://t.me/xiboxcode_community](https://t.me/xiboxcode_community)
+> - Trakteer: <https://trakteer.id/ikhsan3adi>
+> - Saweria: <https://saweria.co/xiboxann>
+
 ## Tech Stack
 
-- **Runtime**: Cloudflare Workers (Elysia Cloudflare adapter)
-- **Framework**: Elysia.js (non-AOT mode, `aot: false`, dynamic handlers)
-- **Database**: Upstash Redis v1
+- **Runtime**: Cloudflare Workers
+- **Framework**: Elysia.js
+- **Database**: Upstash Redis
 - **Local Runtime**: Bun
 - **Testing**: Vitest
-- **Validation**: @sinclair/typebox (runtime via `Value.Check()`, no `new Function()`)
+- **Validation**: @sinclair/typebox
 
 ## Architecture
 

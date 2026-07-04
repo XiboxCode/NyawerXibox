@@ -1,3 +1,9 @@
+export interface TelegramApiResponse<T = unknown> {
+  ok: boolean
+  result?: T
+  description?: string
+}
+
 export interface TelegramUpdate {
   update_id: number
   message?: TelegramMessage
@@ -39,4 +45,9 @@ export interface TelegramChatMemberUpdate {
     status: string
     user: TelegramUser
   }
+}
+
+export interface ChatAdministrator {
+  user: TelegramUser
+  status: string
 }

@@ -4,6 +4,7 @@ import type { LeaderboardRepository } from '../repositories/leaderboard.reposito
 import type { StatsRepository } from '../repositories/stats.repository'
 import type { ConfigRepository } from '../repositories/config.repository'
 import type { TelegramRepository } from '../repositories/telegram.repository'
+import type { NotificationRepository } from '../repositories/notification.repository'
 import { generateDonationId } from '../utils/id'
 import { formatRupiah, escapeMarkdown, formatTanggal } from '../utils/formatter'
 import { parsers, platformNames } from './parsers'
@@ -14,6 +15,7 @@ export function createDonationService(
   statsRepo: StatsRepository,
   configRepo: ConfigRepository,
   telegramRepo: TelegramRepository,
+  notificationRepo: NotificationRepository,
 ) {
   function formatNotification(d: Donation): string {
     const lines: string[] = ['💝 *DONASI BARU* 💝\n']
@@ -34,27 +36,6 @@ export function createDonationService(
     }
     lines.push(`🕐 ${escapeMarkdown(formatTanggal(d.timestamp))}`)
     return lines.join('\n')
-  }
-
-  async function enqueueNotification(
-    chatId: string,
-    text: string,
-  ): Promise<void> {
-    const { Redis } = await import('@upstash/redis')
-    const url =
-      (typeof process !== 'undefined' &&
-        (process as any).env?.UPSTASH_REDIS_REST_URL) ||
-      ''
-    const token =
-      (typeof process !== 'undefined' &&
-        (process as any).env?.UPSTASH_REDIS_REST_TOKEN) ||
-      ''
-    if (!url || !token) return
-    const redis = new Redis({ url, token })
-    await redis.rpush(
-      'pending_notifications',
-      JSON.stringify({ chatId: Number(chatId), text, retryCount: 0 }),
-    )
   }
 
   async function process(
@@ -82,9 +63,9 @@ export function createDonationService(
       const message = formatNotification(donation)
       try {
         await telegramRepo.sendNotification(Number(targetChatId), message)
-      } catch (e) {
+      } catch (e: unknown) {
         console.error('Notification send failed, enqueuing:', e)
-        await enqueueNotification(targetChatId, message)
+        await notificationRepo.enqueue(Number(targetChatId), message)
       }
     }
 

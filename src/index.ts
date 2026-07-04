@@ -8,6 +8,7 @@ import { createLeaderboardRepository } from './repositories/leaderboard.reposito
 import { createStatsRepository } from './repositories/stats.repository'
 import { createConfigRepository } from './repositories/config.repository'
 import { createTelegramRepository } from './repositories/telegram.repository'
+import { createNotificationRepository } from './repositories/notification.repository'
 import { createDonationService } from './services/donation.service'
 import { createLeaderboardService } from './services/leaderboard.service'
 import { createStatsService } from './services/stats.service'
@@ -16,37 +17,40 @@ import { webhookDonationRoutes } from './routes/webhook.donation'
 import { webhookTelegramRoutes } from './routes/webhook.telegram'
 import { healthRoutes } from './routes/health'
 
-// Patch CloudflareAdapter to skip AOT codegen (new Function blocked by CF Workers)
-CloudflareAdapter.beforeCompile = function () {
-  // AOT codegen not supported in CF Workers — let lazy dynamic handlers do the work
-}
+CloudflareAdapter.beforeCompile = function () {}
 
 function buildApp(env: EnvConfig) {
-  const redis = getRedis(env as any)
+  const redis = getRedis({
+    UPSTASH_REDIS_REST_URL: env.UPSTASH_REDIS_REST_URL,
+    UPSTASH_REDIS_REST_TOKEN: env.UPSTASH_REDIS_REST_TOKEN,
+  })
 
   const donationRepo = createDonationRepository(redis)
   const leaderboardRepo = createLeaderboardRepository(redis)
   const statsRepo = createStatsRepository(redis)
   const configRepo = createConfigRepository(redis)
   const telegramRepo = createTelegramRepository(env.TELEGRAM_BOT_TOKEN)
+  const notificationRepo = createNotificationRepository(redis)
 
   const donationService = createDonationService(
-    donationRepo, leaderboardRepo, statsRepo, configRepo, telegramRepo,
+    donationRepo, leaderboardRepo, statsRepo, configRepo, telegramRepo, notificationRepo,
   )
   const leaderboardService = createLeaderboardService(leaderboardRepo, statsRepo)
   const statsService = createStatsService(statsRepo, leaderboardRepo)
   const commandService = createCommandService(leaderboardService, statsService)
 
   return new Elysia({ aot: false, adapter: CloudflareAdapter })
-    .derive(() => ({ env, donationService, commandService, configRepo }))
+    .derive(() => ({ env, donationService, commandService, configRepo, telegramRepo }))
     .onError((ctx) => {
-      const err = ctx.error as any
+      const err: unknown = ctx.error
+      const errorInfo = err instanceof Error
+        ? { message: err.message, name: err.name, stack: err.stack }
+        : { message: String(err) }
       console.error('Elysia error:', JSON.stringify({
         path: ctx.path,
         method: ctx.request.method,
         status: ctx.code,
-        type: err?.type ?? typeof err,
-        message: err?.message ?? String(err),
+        ...errorInfo,
       }, null, 2))
     })
     .use(webhookDonationRoutes)
@@ -64,14 +68,17 @@ export default {
   },
 
   async scheduled(
-    _event: any,
+    _event: unknown,
     env: Record<string, string>,
-    ctx: any,
+    ctx: { waitUntil: (p: Promise<unknown>) => void },
   ): Promise<void> {
     const e = env as unknown as EnvConfig
     ctx.waitUntil(
       handleRetry(
-        getRedis(e as any),
+        getRedis({
+          UPSTASH_REDIS_REST_URL: e.UPSTASH_REDIS_REST_URL,
+          UPSTASH_REDIS_REST_TOKEN: e.UPSTASH_REDIS_REST_TOKEN,
+        }),
         e.TELEGRAM_BOT_TOKEN,
         e.ADMIN_CHAT_ID,
       ),

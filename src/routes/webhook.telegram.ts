@@ -1,40 +1,25 @@
 import { Elysia, t } from 'elysia'
+import type { Context } from 'elysia'
+import { checkTelegramAdmin } from '../lib/telegram'
 import type { EnvConfig } from '../types/config'
 import type { TelegramUpdate } from '../types/telegram'
-import { sendTelegramMessage } from '../lib/telegram'
+import type { CommandService } from '../services/command.service'
+import type { ConfigRepository } from '../repositories/config.repository'
+import type { TelegramRepository } from '../repositories/telegram.repository'
 
-async function checkAdmin(
-  botToken: string,
-  chatId: number,
-  userId: number,
-): Promise<boolean> {
-  try {
-    const res = await fetch(
-      `https://api.telegram.org/bot${botToken}/getChatAdministrators`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ chat_id: chatId }),
-      },
-    )
-    const data: any = await res.json()
-    if (!data.ok) return false
-    return data.result.some((a: any) => a.user.id === userId)
-  } catch {
-    return false
-  }
+type TelegramRouteCtx = Context & {
+  env: EnvConfig
+  commandService: CommandService
+  configRepo: ConfigRepository
+  telegramRepo: TelegramRepository
 }
 
 export function webhookTelegramRoutes(app: Elysia) {
   return app.post(
     '/webhook/telegram',
-    async (ctx: any) => {
-      const env = ctx.env as EnvConfig
-      const commandService = ctx.commandService
-      const configRepo = ctx.configRepo
-      const body = ctx.body as TelegramUpdate
-
-      const msg = body.message
+    async (ctx: unknown) => {
+      const { env, commandService, configRepo, telegramRepo, body } = ctx as TelegramRouteCtx
+      const msg = (body as TelegramUpdate).message
       if (!msg?.text) return { status: 'ok' }
 
       const chatId = msg.chat.id
@@ -47,8 +32,8 @@ export function webhookTelegramRoutes(app: Elysia) {
 
       const send = async (reply: string) => {
         try {
-          await sendTelegramMessage(env.TELEGRAM_BOT_TOKEN, chatId, reply)
-        } catch (e) {
+          await telegramRepo.sendMessage(chatId, reply)
+        } catch (e: unknown) {
           console.error('Failed to send command reply:', e)
         }
       }
@@ -80,7 +65,7 @@ export function webhookTelegramRoutes(app: Elysia) {
             break
           }
           {
-            const isAdmin = await checkAdmin(
+            const isAdmin = await checkTelegramAdmin(
               env.TELEGRAM_BOT_TOKEN,
               chatId,
               senderId!,
